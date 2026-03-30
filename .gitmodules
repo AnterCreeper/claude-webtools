@@ -1,0 +1,6 @@
+[submodule "qt-web-extractor"]
+	path = qt-web-extractor
+	url = https://github.com/wszqkzqk/qt-web-extractor
+[submodule "GUILessBingSearch"]
+	path = GUILessBingSearch
+	url = https://github.com/wszqkzqk/GUILessBingSearch

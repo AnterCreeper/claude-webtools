@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Web Extract CLI - 调用本地 qt-web-extractor 服务提取网页内容"""
+
+import argparse
+import json
+import sys
+import os
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+
+DEFAULT_BASE_URL = os.environ.get("WEBEXTRACT_URL", "http://127.0.0.1:8766")
+API_KEY = os.environ.get("WEBEXTRACT_API_KEY", "")
+
+
+def extract(url: str, pdf: bool = False, base_url: str = None) -> dict:
+    """调用 qt-web-extractor 服务提取单个 URL"""
+    base = (base_url or DEFAULT_BASE_URL).rstrip("/")
+    endpoint = f"{base}/extract"
+
+    data = json.dumps({"url": url, "pdf": pdf}).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    req = Request(endpoint, data=data, headers=headers, method="POST")
+
+    try:
+        with urlopen(req, timeout=60) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        try:
+            err_json = json.loads(err_body)
+            raise RuntimeError(f"提取失败: {err_json.get('error', err_body)}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"提取失败 (HTTP {e.code}): {err_body}")
+    except URLError as e:
+        raise RuntimeError(f"无法连接到提取服务 ({base}): {e.reason}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"解析响应失败: {e}")
+
+
+def extract_batch(urls: list[str], base_url: str = None) -> list[dict]:
+    """批量提取多个 URL（Open WebUI 格式）"""
+    base = (base_url or DEFAULT_BASE_URL).rstrip("/")
+    endpoint = base
+
+    data = json.dumps({"urls": urls}).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    req = Request(endpoint, data=data, headers=headers, method="POST")
+
+    try:
+        with urlopen(req, timeout=120) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        try:
+            err_json = json.loads(err_body)
+            raise RuntimeError(f"提取失败: {err_json.get('error', err_body)}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"提取失败 (HTTP {e.code}): {err_body}")
+    except URLError as e:
+        raise RuntimeError(f"无法连接到提取服务 ({base}): {e.reason}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"解析响应失败: {e}")
+
+
+def format_result(result: dict) -> str:
+    """格式化单个提取结果"""
+    lines = []
+
+    title = result.get("title", "")
+    url = result.get("url", "")
+    text = result.get("text", "")
+    error = result.get("error", "")
+
+    if title:
+        lines.append(f"标题: {title}")
+    if url:
+        lines.append(f"URL: {url}")
+    if error:
+        lines.append(f"错误: {error}")
+    if text:
+        lines.append("\n内容:")
+        lines.append("-" * 40)
+        lines.append(text[:8000])  # 限制输出长度
+        if len(text) > 8000:
+            lines.append(f"\n... (内容已截断，共 {len(text)} 字符)")
+
+    return "\n".join(lines)
+
+
+def format_batch_results(results: list[dict]) -> str:
+    """格式化批量提取结果"""
+    lines = [f"成功提取 {len(results)} 个页面:\n"]
+
+    for i, doc in enumerate(results, 1):
+        metadata = doc.get("metadata", {})
+        content = doc.get("page_content", "")
+        source = metadata.get("source", "")
+        title = metadata.get("title", "")
+        error = metadata.get("error", "")
+
+        lines.append(f"[{i}] {title or '无标题'}")
+        lines.append(f"    来源: {source}")
+        if error:
+            lines.append(f"    错误: {error}")
+        if content:
+            preview = content[:500].replace("\n", " ")
+            lines.append(f"    预览: {preview}...")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Web Extract - 网页内容提取（支持 JavaScript 渲染）",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s https://example.com
+  %(prog)s https://example.com/document.pdf --pdf
+  %(prog)s url1 url2 url3
+  WEBEXTRACT_URL=http://localhost:8766 %(prog)s https://example.com
+        """
+    )
+    parser.add_argument("urls", nargs="*", help="要提取的网页 URL")
+    parser.add_argument(
+        "--pdf", action="store_true",
+        help="强制以 PDF 模式提取"
+    )
+    parser.add_argument(
+        "--url", dest="base_url", default=None,
+        help=f"服务地址 (默认: {DEFAULT_BASE_URL})"
+    )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="以 JSON 格式输出原始结果"
+    )
+    parser.add_argument(
+        "--health", action="store_true",
+        help="检查服务健康状态"
+    )
+
+    args = parser.parse_args()
+
+    base_url = args.base_url or DEFAULT_BASE_URL
+
+    if args.health:
+        try:
+            req = Request(f"{base_url}/health", method="GET")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                print(f"服务状态: {data.get('status', 'unknown')}")
+                print(f"服务地址: {base_url}")
+                return 0
+        except Exception as e:
+            print(f"服务检查失败: {e}", file=sys.stderr)
+            return 1
+
+    if not args.urls:
+        print("错误: 请提供至少一个 URL", file=sys.stderr)
+        parser.print_help()
+        return 1
+
+    try:
+        if len(args.urls) == 1:
+            # 单 URL 模式
+            result = extract(args.urls[0], args.pdf, base_url)
+
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(format_result(result))
+        else:
+            # 批量模式
+            results = extract_batch(args.urls, base_url)
+
+            if args.json:
+                print(json.dumps(results, ensure_ascii=False, indent=2))
+            else:
+                print(format_batch_results(results))
+
+        return 0
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

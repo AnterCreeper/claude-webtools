@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Bing Web Search CLI - 调用本地 GUILessBingSearch 服务"""
+
+import argparse
+import json
+import sys
+import os
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+
+DEFAULT_BASE_URL = os.environ.get("WEBSEARCH_URL", "http://127.0.0.1:8765")
+API_KEY = os.environ.get("WEBSEARCH_API_KEY", "")
+
+
+def search(query: str, count: int = 10, base_url: str = None) -> list[dict]:
+    """调用 GUILessBingSearch 服务执行搜索"""
+    base = (base_url or DEFAULT_BASE_URL).rstrip("/")
+    url = f"{base}/search"
+
+    data = json.dumps({"query": query, "count": count}).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    req = Request(url, data=data, headers=headers, method="POST")
+
+    try:
+        with urlopen(req, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        try:
+            err_json = json.loads(err_body)
+            raise RuntimeError(f"搜索失败: {err_json.get('error', err_body)}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"搜索失败 (HTTP {e.code}): {err_body}")
+    except URLError as e:
+        raise RuntimeError(f"无法连接到搜索服务 ({base}): {e.reason}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"解析响应失败: {e}")
+
+
+def format_results(results: list[dict], query: str) -> str:
+    """格式化搜索结果"""
+    if not results:
+        return f"未找到与 '{query}' 相关的结果"
+
+    lines = [f"找到 {len(results)} 条结果（'{query}'）：\n"]
+
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "无标题")
+        link = r.get("link", "")
+        snippet = r.get("snippet", "")
+
+        lines.append(f"[{i}] {title}")
+        lines.append(f"    {link}")
+        if snippet:
+            lines.append(f"    {snippet}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Bing Web Search - 实时网页搜索",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  %(prog)s "深度学习 congestion control"
+  %(prog)s "transformer architecture" -n 20
+  WEBSEARCH_URL=http://localhost:8765 %(prog)s "Python tutorial"
+        """
+    )
+    parser.add_argument("query", nargs="?", help="搜索关键词")
+    parser.add_argument(
+        "-n", "--count", type=int, default=10,
+        help="返回结果数量 (默认: 10, 最大: 30)"
+    )
+    parser.add_argument(
+        "--url", dest="base_url", default=None,
+        help=f"服务地址 (默认: {DEFAULT_BASE_URL})"
+    )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="以 JSON 格式输出原始结果"
+    )
+    parser.add_argument(
+        "--health", action="store_true",
+        help="检查服务健康状态"
+    )
+
+    args = parser.parse_args()
+
+    base_url = args.base_url or DEFAULT_BASE_URL
+
+    if args.health:
+        try:
+            req = Request(f"{base_url}/health", method="GET")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                print(f"服务状态: {data.get('status', 'unknown')}")
+                print(f"服务地址: {base_url}")
+                return 0
+        except Exception as e:
+            print(f"服务检查失败: {e}", file=sys.stderr)
+            return 1
+
+    if not args.query:
+        print("错误: 请提供搜索关键词", file=sys.stderr)
+        parser.print_help()
+        return 1
+
+    try:
+        results = search(args.query, args.count, base_url)
+
+        if args.json:
+            print(json.dumps(results, ensure_ascii=False, indent=2))
+        else:
+            print(format_results(results, args.query))
+
+        return 0
+    except Exception as e:
+        print(f"错误: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
