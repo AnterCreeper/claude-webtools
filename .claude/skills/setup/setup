@@ -51,11 +51,9 @@ def get_repo_root():
     # .claude/skills/setup -> 返回 .claude/skills -> .claude -> repo root
     return os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
 
-def get_memory_dir():
-    """获取记忆目录路径"""
-    repo_root = get_repo_root()
-    repo_name = os.path.basename(repo_root)
-    return os.path.expanduser(f"~/.claude/projects/-root--{repo_name}/memory")
+def get_memory_dir(custom_dir):
+    """获取记忆目录路径（必须指定）"""
+    return os.path.expanduser(custom_dir)
 
 def init_submodules():
     """初始化 git 子模块"""
@@ -142,11 +140,11 @@ def check_services():
 
     return all_ok
 
-def setup_memory():
+def setup_memory(custom_dir=None):
     """设置记忆文件"""
     print_step("设置记忆文件...")
 
-    memory_dir = get_memory_dir()
+    memory_dir = get_memory_dir(custom_dir)
     repo_root = get_repo_root()
 
     # 确保记忆目录存在
@@ -199,17 +197,19 @@ def main():
     parser = argparse.ArgumentParser(description="初始化 claude-webtools 仓库")
     parser.add_argument("--check", action="store_true", help="仅检查服务状态")
     parser.add_argument("--memory", action="store_true", help="仅设置记忆文件")
+    parser.add_argument("--memory-dir", type=str, required=True, help="指定记忆目录路径（如 ~/.claude/projects/-root--xxx/memory）")
     args = parser.parse_args()
 
     print(f"{BLUE}=== claude-webtools 初始化 ==={RESET}")
     print(f"仓库: {get_repo_root()}")
+    print(f"记忆目录: {args.memory_dir}")
 
     if args.check:
         check_services()
         return
 
     if args.memory:
-        setup_memory()
+        setup_memory(args.memory_dir)
         return
 
     # 完整初始化
@@ -218,7 +218,7 @@ def main():
     results.append(("子模块", init_submodules()))
     results.append(("脚本权限", set_permissions()))
     results.append(("服务状态", check_services()))
-    results.append(("记忆文件", setup_memory()))
+    results.append(("记忆文件", setup_memory(args.memory_dir)))
 
     # 总结
     print(f"\n{BLUE}=== 初始化总结 ==={RESET}")

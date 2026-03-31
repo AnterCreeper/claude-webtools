@@ -12,4 +12,4 @@
 
 本项目包含用于 Claude Code 的网页工具（网页搜索和网页提取）的技能描述和调用脚本，以实现一个基础的环境，由 [GUILessBingSearch](https://github.com/wszqkzqk/GUILessBingSearch) 和 [qt-web-extractor](https://github.com/wszqkzqk/qt-web-extractor) 组成。更多信息请参阅[博客](https://wszqkzqk.github.io/2026/02/26/OpenWebUI-Agentic-Search-Configuration)。
 
-使用前请先本地部署这两个工具，或使用 docker 镜像 [webtools](https://github.com/AnterCreeper/webtools)。
+请使用 `/setup`(CC 内) 完成记忆体的初始化。另外，使用前请先手动或利用 AI 辅助本地部署这两个工具，或使用 docker 镜像 [webtools](https://github.com/AnterCreeper/webtools)。

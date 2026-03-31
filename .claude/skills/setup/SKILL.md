@@ -12,9 +12,9 @@ author: Claude
 ## 用法
 
 ```bash
-./skills/setup/setup           # 完整初始化
-./skills/setup/setup --check   # 仅检查服务状态
-./skills/setup/setup --memory  # 仅设置记忆文件链接
+./skills/setup/setup --memory-dir PATH           # 完整初始化（必须指定记忆目录）
+./skills/setup/setup --check                     # 仅检查服务状态
+./skills/setup/setup --memory --memory-dir PATH  # 仅设置记忆文件
 ```
 
 ## 执行内容
@@ -29,6 +29,18 @@ author: Claude
 - Git 仓库已克隆
 - Python 3 可用
 - 有可写权限
+
+## 选项说明
+
+| 选项 | 必需 | 说明 |
+|------|------|------|
+| `--memory-dir PATH` | **是** | 指定 Claude Code 记忆目录路径 |
+| `--check` | 否 | 仅检查服务运行状态（不需要 `--memory-dir`） |
+| `--memory` | 否 | 仅创建记忆文件 |
+
+**如何确定记忆目录路径**
+
+在 Claude Code 中运行 `claude-memory` 或查看提示信息，记忆目录位于 `~/.claude/projects/{项目名}/memory/`。
 
 ## 故障排除
 
