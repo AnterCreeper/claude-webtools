@@ -15,6 +15,9 @@
 
 ```
 .claude/skills/          # Claude Code 技能定义
+├── setup/               # 初始化技能
+│   ├── SKILL.md         # 技能文档
+│   └── setup            # Python CLI 脚本
 ├── websearch/           # Bing 搜索技能
 │   ├── SKILL.md         # 技能文档
 │   └── websearch        # Python CLI 脚本
@@ -118,3 +121,26 @@ git submodule update --init --recursive
 **空子模块**：运行 `git submodule update --init --recursive`。
 
 **权限被拒绝**：确保脚本可执行：`chmod +x skills/websearch/websearch skills/webextract/webextract`
+
+---
+
+## 快速开始 (Setup)
+
+使用内置的 `setup` 技能一键初始化仓库：
+
+```bash
+# 完整初始化
+./skills/setup/setup
+
+# 仅检查服务状态
+./skills/setup/setup --check
+
+# 仅设置记忆文件
+./skills/setup/setup --memory
+```
+
+setup 技能会完成：
+1. 初始化 git 子模块（GUILessBingSearch、qt-web-extractor）
+2. 设置脚本可执行权限
+3. 检查服务运行状态
+4. 创建 Claude Code 记忆文件（包含行为准则）

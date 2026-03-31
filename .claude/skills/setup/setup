@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+"""
+claude-webtools 初始化脚本
+设置子模块、权限、服务检查
+"""
+
+import os
+import sys
+import subprocess
+import argparse
+
+# 颜色输出
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+BLUE = "\033[94m"
+RESET = "\033[0m"
+
+def run(cmd, cwd=None, check=True):
+    """运行命令并返回结果"""
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        if check and result.returncode != 0:
+            return None, result.stderr
+        return result.stdout.strip(), None
+    except Exception as e:
+        return None, str(e)
+
+def print_step(msg):
+    print(f"\n{BLUE}▶ {msg}{RESET}")
+
+def print_ok(msg):
+    print(f"{GREEN}✓ {msg}{RESET}")
+
+def print_warn(msg):
+    print(f"{YELLOW}⚠ {msg}{RESET}")
+
+def print_error(msg):
+    print(f"{RED}✗ {msg}{RESET}")
+
+def get_repo_root():
+    """获取仓库根目录"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # .claude/skills/setup -> 返回 .claude/skills -> .claude -> repo root
+    return os.path.abspath(os.path.join(script_dir, "..", "..", ".."))
+
+def get_memory_dir():
+    """获取记忆目录路径"""
+    repo_root = get_repo_root()
+    repo_name = os.path.basename(repo_root)
+    return os.path.expanduser(f"~/.claude/projects/-root--{repo_name}/memory")
+
+def init_submodules():
+    """初始化 git 子模块"""
+    print_step("初始化 git 子模块...")
+    repo_root = get_repo_root()
+
+    # 检查是否有子模块需要初始化
+    stdout, stderr = run("git submodule status", cwd=repo_root, check=False)
+    if stdout is None:
+        print_warn("无法获取子模块状态")
+        return False
+
+    # 检查是否有未初始化的子模块（以 - 开头）
+    lines = stdout.split('\n')
+    uninitialized = [l for l in lines if l.strip().startswith('-')]
+
+    if not uninitialized:
+        print_ok("子模块已初始化")
+        return True
+
+    print(f"发现 {len(uninitialized)} 个未初始化的子模块")
+    stdout, stderr = run("git submodule update --init --recursive", cwd=repo_root)
+    if stdout is None:
+        print_error(f"子模块初始化失败: {stderr}")
+        return False
+
+    print_ok("子模块初始化完成")
+    return True
+
+def set_permissions():
+    """设置脚本权限"""
+    print_step("设置脚本权限...")
+    repo_root = get_repo_root()
+    skills_dir = os.path.join(repo_root, "skills")
+
+    scripts = [
+        os.path.join(skills_dir, "websearch", "websearch"),
+        os.path.join(skills_dir, "webextract", "webextract"),
+    ]
+
+    for script in scripts:
+        if os.path.exists(script):
+            os.chmod(script, 0o755)
+            print_ok(f"已设置可执行: {os.path.basename(script)}")
+        else:
+            print_warn(f"脚本不存在: {script}")
+
+    return True
+
+def check_service(url, name):
+    """检查服务状态"""
+    import urllib.request
+    import urllib.error
+
+    try:
+        req = urllib.request.Request(f"{url}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+def check_services():
+    """检查所有服务状态"""
+    print_step("检查服务状态...")
+
+    websearch_url = os.environ.get("WEBSEARCH_URL", "http://127.0.0.1:8765")
+    webextract_url = os.environ.get("WEBEXTRACT_URL", "http://127.0.0.1:8766")
+
+    services = [
+        ("websearch (GUILessBingSearch)", websearch_url),
+        ("webextract (qt-web-extractor)", webextract_url),
+    ]
+
+    all_ok = True
+    for name, url in services:
+        if check_service(url, name):
+            print_ok(f"{name} 运行中 ({url})")
+        else:
+            print_error(f"{name} 未响应 ({url})")
+            all_ok = False
+
+    if not all_ok:
+        print(f"\n{YELLOW}提示: 请参考 CLAUDE.md 部署相关服务{RESET}")
+
+    return all_ok
+
+def setup_memory():
+    """设置记忆文件"""
+    print_step("设置记忆文件...")
+
+    memory_dir = get_memory_dir()
+    repo_root = get_repo_root()
+
+    # 确保记忆目录存在
+    os.makedirs(memory_dir, exist_ok=True)
+
+    # 检查是否已有记忆文件
+    behavior_file = os.path.join(memory_dir, "webtools_behavior.md")
+
+    if os.path.exists(behavior_file):
+        print_ok(f"记忆文件已存在: {behavior_file}")
+        return True
+
+    # 创建记忆文件（从仓库复制模板）
+    template = """---
+name: webtools_behavior
+description: Claude Code 在 claude-webtools 仓库中的完整行为准则
+type: feedback
+---
+
+# 默认使用本地技能
+- **搜索**: 使用 `websearch` 技能 (GUILessBingSearch @ 127.0.0.1:8765)
+- **内容提取**: 使用 `webextract` 技能 (qt-web-extractor @ 127.0.0.1:8766)
+- **不使用**: `WebSearch` 和 `WebFetch` 内置工具
+
+# 多轮检索工作流
+- **不确定即搜索**: 对用户提及的不确定内容，必须调用搜索
+- **多语言验证**: 学术/技术内容至少补充一次英文搜索
+- **全文必看**: 参考的信息必须通过 `webextract` 获取全文
+- **充分性检查**: 内容不足时继续多轮检索
+"""
+
+    try:
+        with open(behavior_file, 'w') as f:
+            f.write(template)
+        print_ok(f"已创建记忆文件: {behavior_file}")
+
+        # 更新 MEMORY.md 索引
+        memory_index = os.path.join(memory_dir, "MEMORY.md")
+        with open(memory_index, 'w') as f:
+            f.write("# 记忆索引\n\n## 反馈与偏好\n")
+            f.write("- [webtools 行为准则](webtools_behavior.md) — 技能使用 + 多轮检索工作流\n")
+        print_ok("已更新记忆索引")
+
+        return True
+    except Exception as e:
+        print_error(f"创建记忆文件失败: {e}")
+        return False
+
+def main():
+    parser = argparse.ArgumentParser(description="初始化 claude-webtools 仓库")
+    parser.add_argument("--check", action="store_true", help="仅检查服务状态")
+    parser.add_argument("--memory", action="store_true", help="仅设置记忆文件")
+    args = parser.parse_args()
+
+    print(f"{BLUE}=== claude-webtools 初始化 ==={RESET}")
+    print(f"仓库: {get_repo_root()}")
+
+    if args.check:
+        check_services()
+        return
+
+    if args.memory:
+        setup_memory()
+        return
+
+    # 完整初始化
+    results = []
+
+    results.append(("子模块", init_submodules()))
+    results.append(("脚本权限", set_permissions()))
+    results.append(("服务状态", check_services()))
+    results.append(("记忆文件", setup_memory()))
+
+    # 总结
+    print(f"\n{BLUE}=== 初始化总结 ==={RESET}")
+    for name, ok in results:
+        status = f"{GREEN}✓{RESET}" if ok else f"{YELLOW}⚠{RESET}"
+        print(f"{status} {name}")
+
+    print(f"\n{GREEN}初始化完成！{RESET}")
+    print(f"提示: 如有服务未运行，请参考 CLAUDE.md 进行部署")
+
+if __name__ == "__main__":
+    main()
