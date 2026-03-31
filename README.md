@@ -1,18 +1,15 @@
-# Claude Base Environment with Webtools Skills
+# Claude Web 基础环境
 
-If any questions, welcome for Issues & PRs  
-如果有疑问，欢迎提交Issues或PR
+如有疑问，欢迎提交 Issues 或 PR
 
-**WARNING! This Project is not been fully long-term productive tested and without warranty of any kind, use at your own risk!**   
-**警告！该项目未经充分的长期生产环境测试，作者不作任何保证，使用需要你自己衡量**
+**警告！本项目未经充分的长期生产环境测试，作者不作任何保证，使用需自行承担风险！**
 
-### License
+### 许可证
 
-This project is licensed under the GPL-3.0-or-later. **DO NOT** download or clone this project until you have read and agree the LICENSE.  
-该项目采用 `GPL-3.0 以及之后版本` 授权。当你下载或克隆项目时，默认已经阅读并同意该协定。
+本项目采用 GPL-3.0 及后续版本授权。**请勿**在阅读和同意许可证之前下载或克隆本项目。当你下载或克隆项目时，默认表示已阅读并同意该协议。
 
-### Overview
+### 概述
 
-This Project contains skills description and calling scripts of fundamental web tools(websearch and webextract) for claude code, which consists of [GUILessBingSearch](https://github.com/wszqkzqk/GUILessBingSearch) and [qt-web-extractor](https://github.com/wszqkzqk/qt-web-extractor). For more information, please refer to [Blog](https://wszqkzqk.github.io/2026/02/26/OpenWebUI-Agentic-Search-Configuration).
+本项目包含用于 Claude Code 的网页工具（网页搜索和网页提取）的技能描述和调用脚本，以实现一个基础的环境，由 [GUILessBingSearch](https://github.com/wszqkzqk/GUILessBingSearch) 和 [qt-web-extractor](https://github.com/wszqkzqk/qt-web-extractor) 组成。更多信息请参阅[博客](https://wszqkzqk.github.io/2026/02/26/OpenWebUI-Agentic-Search-Configuration)。
 
-Please deploy both tools locally before use, or use the docker image [webtools](https://github.com/AnterCreeper/webtools).
+使用前请先本地部署这两个工具，或使用 docker 镜像 [webtools](https://github.com/AnterCreeper/webtools)。
